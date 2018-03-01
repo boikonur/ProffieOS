@@ -36,9 +36,10 @@ Here is a list of individual components that can be used to build a blade style:
 ### Serial Monitor Commands
 Connect using 9600 baud rate
 You can use the serial monitor to debug and control the software once uploaded, here is an incomplete list of commands:
-| Command        | Description           | Note  |
-| ------------- |:-------------:| -----:|
-| help  | Prints a list of known commands | N/A |
+
+| Command        | Description   | Note          |
+| -------------  | ------------- | ------------- |
+| help | Prints a list of known commands | N/A |
 | on | Turns the saber on | N/A |
 | off | Turns the saber off | N/A |
 | blade on | Turns the blade on (but leaves the sound off) | N/A |
