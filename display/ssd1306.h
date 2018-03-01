@@ -33,7 +33,7 @@ const Glyph BatteryBar16 = { 16, 0, 0, GLYPHDATA(BatteryBar16_data) };
 
 #include "StarJedi10Font.h"
 
-class SSD1306 : public I2CDevice, Looper, StateMachine, SaberBase {
+class SSD1306 : public I2CDevice, Looper, StateMachine, SaberBase, CommandParser {
 public:
   static const int WIDTH = 128;
   static const int HEIGHT = 32;
@@ -93,7 +93,7 @@ public:
     SCREEN_PLI,
   };
 
-  SSD1306() : I2CDevice(0x3C) { }
+  SSD1306() : I2CDevice(0x3C), CommandParser() {}
   void Send(int c) { writeByte(0, c); }
 
   void Draw(const Glyph& glyph, int x, int y) {
@@ -110,6 +110,19 @@ public:
       for (int i = begin; i < end; i++) pos[i] |= glyph.data[i];
     }
   }
+
+   bool Parse(const char* cmd, const char* arg) override {
+    if (!strcmp(cmd, "ssd")) {     
+          SB_Message(arg);     
+         return true;        
+    }
+    return false;
+  }
+
+  void Help() override {
+    STDOUT.print("ssd \"text\"");
+    STDOUT.println(" - Prints on LCD ");
+ }
 
   void DrawBatteryBar(const Glyph& bar) {
     int start, end;
