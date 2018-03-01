@@ -92,6 +92,7 @@ public:
 
   enum Screen {
     SCREEN_STARTUP,
+    SCREEN_SAVER,
     SCREEN_MESSAGE,
     SCREEN_PLI,
   };
@@ -160,16 +161,46 @@ public:
     }
   }
 
+void DrawScreenSaver( const char* text, uint32_t speed){
+   static unsigned int yPosition = 0;
+   static unsigned int xPosition = 0;
+   static int xDirection = 1;
+   static int yDirection = 1;
+    if (xPosition == -50){
+      xDirection = speed;
+    }
+    else 
+    if (xPosition == WIDTH-50){
+      xDirection = -speed;
+    }
+
+    if (yPosition == 6){
+      yDirection = speed;
+    }
+    else 
+    if (yPosition == HEIGHT){
+      yDirection = -speed;
+    }
+ 
+    DrawText(text, xPosition, yPosition, FONT_NAME); 
+    xPosition += xDirection;
+    yPosition += yDirection;  
+}
+
   void FillFrameBuffer() {
     memset(frame_buffer_, 0, sizeof(frame_buffer_));
 
     if (millis() - displayed_when_ > 5000)
-      screen_ = SCREEN_PLI;
+      screen_ = SCREEN_SAVER;
 
     switch (screen_) {
       case SCREEN_STARTUP:
         DrawText("==SabeR===", 0,15, FONT_NAME);
         DrawText("++Teensy++",-4,31, FONT_NAME);
+        break;
+
+      case SCREEN_SAVER:
+        DrawScreenSaver("Hello",1);       
         break;
 
       case SCREEN_PLI:
