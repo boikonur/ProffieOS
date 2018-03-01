@@ -161,30 +161,42 @@ public:
     }
   }
 
-void DrawScreenSaver( const char* text, uint32_t speed){
-   static unsigned int yPosition = 0;
-   static unsigned int xPosition = 0;
+void DrawScreenSaver( const char* text){
+   static int yPosition = 0;
+   static int xPosition = 0;
    static int xDirection = 1;
    static int yDirection = 1;
-    if (xPosition == -50){
-      xDirection = speed;
+    if (xPosition == 0){
+      xDirection = 1;
     }
     else 
-    if (xPosition == WIDTH-50){
-      xDirection = -speed;
+    if (xPosition == WIDTH){
+      xDirection = -1;
     }
 
-    if (yPosition == 6){
-      yDirection = speed;
+    if (yPosition == 0){
+      yDirection = 1;
     }
     else 
     if (yPosition == HEIGHT){
-      yDirection = -speed;
+      yDirection = -1;
     }
  
     DrawText(text, xPosition, yPosition, FONT_NAME); 
     xPosition += xDirection;
     yPosition += yDirection;  
+}
+
+char* GfxBatteryPercentage(void){
+  static char bat_info[6];
+  static uint32_t ref_time=0;
+
+  if (uint32_t(millis()- ref_time) > 2000){
+    ref_time=millis();
+    int perc = floor(battery_monitor.battery_percent() );
+    sprintf(bat_info, "%d%%", perc);   
+  }
+  return bat_info;
 }
 
   void FillFrameBuffer() {
@@ -199,8 +211,8 @@ void DrawScreenSaver( const char* text, uint32_t speed){
         DrawText("++Teensy++",-4,31, FONT_NAME);
         break;
 
-      case SCREEN_SAVER:
-        DrawScreenSaver("Hello",1);       
+      case SCREEN_SAVER:        
+        DrawScreenSaver(GfxBatteryPercentage());       
         break;
 
       case SCREEN_PLI:
