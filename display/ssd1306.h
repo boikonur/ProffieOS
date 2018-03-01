@@ -33,6 +33,7 @@ const Glyph BatteryBar16 = { 16, 0, 0, GLYPHDATA(BatteryBar16_data) };
 
 #include "StarJedi10Font.h"
 
+#define FONT_NAME Starjedi10pt7bGlyphs
 #include "saber_logo.h"
 const Glyph SaberLogo = { 0, 0, 0, GLYPHDATA(saberLogoLS6) };
 class SSD1306 : public I2CDevice, Looper, StateMachine, SaberBase, CommandParser {
@@ -167,8 +168,8 @@ public:
 
     switch (screen_) {
       case SCREEN_STARTUP:
-        DrawText("==SabeR===", 0,15, Starjedi10pt7bGlyphs);
-        DrawText("++Teensy++",-4,31, Starjedi10pt7bGlyphs);
+        DrawText("==SabeR===", 0,15, FONT_NAME);
+        DrawText("++Teensy++",-4,31, FONT_NAME);
         break;
 
       case SCREEN_PLI:
@@ -177,9 +178,9 @@ public:
 
       case SCREEN_MESSAGE:
         if (strchr(message_, '\n')) {
-          DrawText(message_, 0, 15, Starjedi10pt7bGlyphs);
+          DrawText(message_, 0, 15, FONT_NAME);
         } else {
-          DrawText(message_, 0, 23, Starjedi10pt7bGlyphs);
+          DrawText(message_, 0, 23, FONT_NAME);
         }
     }
   }
