@@ -33,6 +33,8 @@ const Glyph BatteryBar16 = { 16, 0, 0, GLYPHDATA(BatteryBar16_data) };
 
 #include "StarJedi10Font.h"
 
+#include "saber_logo.h"
+const Glyph SaberLogo = { 0, 0, 0, GLYPHDATA(saberLogoLS6) };
 class SSD1306 : public I2CDevice, Looper, StateMachine, SaberBase, CommandParser {
 public:
   static const int WIDTH = 128;
