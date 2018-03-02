@@ -93,6 +93,7 @@ public:
   enum Screen {
     SCREEN_STARTUP,
     SCREEN_SAVER,
+    SCREEN_APPLICATION,
     SCREEN_MESSAGE,
     SCREEN_PLI,
   };
