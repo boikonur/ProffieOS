@@ -27,6 +27,10 @@ const uint32_t BatteryBar16_data[] = {
    0b00000111111111111111111111100000UL,
 };
 
+#define BLACK 0
+#define WHITE 1
+#define INVERSE 2
+
 #define GLYPHDATA(X) NELEM(X), X
 
 const Glyph BatteryBar16 = { 16, 0, 0, GLYPHDATA(BatteryBar16_data) };
