@@ -104,16 +104,16 @@ public:
   SSD1306() : I2CDevice(0x3C), CommandParser() {}
   void Send(int c) { writeByte(0, c); }
 
- void DrawPixel(int x, int y, uint8_t color){
+ void DrawPixel(int16_t  x, int16_t  y, uint8_t color){
 
     if (y<0 || x< 0) return;
     if (y>HEIGHT || x> WIDTH) return;
  
   switch (color)
     {
-      case WHITE:   frame_buffer_[x] |= 0x1<<y; break;
-      case BLACK:    frame_buffer_[x] &= ~(0x1 << y); break;
-      case INVERSE:  frame_buffer_[x] ^= (0x1 << y); break;
+      case WHITE:   frame_buffer_[x] |= 0x1 << y; break;
+      case BLACK:   frame_buffer_[x] &= ~(0x1 << y); break;
+      case INVERSE: frame_buffer_[x] ^= (0x1 << y); break;
     }
  }
   void Draw(const Glyph& glyph, int x, int y) {
@@ -131,28 +131,28 @@ public:
     }
   }
 
-#ifndef _swap_uint8_t
-#define _swap_uint8_t(a, b) { int16_t t = a; a = b; b = t; }
+#ifndef _swap_int16_t
+#define _swap_int16_t(a, b) { int16_t t = a; a = b; b = t; }
 #endif
 
-void DrawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color) {
-    uint8_t steep = abs(y1 - y0) > abs(x1 - x0);
+void DrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t color) {
+    int16_t steep = abs(y1 - y0) > abs(x1 - x0);
     if (steep) {
-        _swap_uint8_t(x0, y0);
-        _swap_uint8_t(x1, y1);
+        _swap_int16_t(x0, y0);
+        _swap_int16_t(x1, y1);
     }
 
     if (x0 > x1) {
-        _swap_uint8_t(x0, x1);
-        _swap_uint8_t(y0, y1);
+        _swap_int16_t(x0, x1);
+        _swap_int16_t(y0, y1);
     }
 
-    uint8_t dx, dy;
+    int16_t dx, dy;
     dx = x1 - x0;
     dy = abs(y1 - y0);
 
-    uint8_t err = dx / 2;
-    uint8_t ystep;
+    int16_t err = dx / 2;
+    int16_t ystep;
 
     if (y0 < y1) {
         ystep = 1;
@@ -174,12 +174,12 @@ void DrawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color) {
     }
 }
 
-  void DrawCircle(uint8_t x0, uint8_t y0, uint8_t r, uint8_t color) {
-    uint8_t f = 1 - r;
-    uint8_t ddF_x = 1;
-    uint8_t ddF_y = -2 * r;
-    uint8_t x = 0;
-    uint8_t y = r;
+  void DrawCircle(int16_t  x0, int16_t  y0, int16_t  r, int16_t  color) {
+    int16_t f = 1 - r;
+    int16_t ddF_x = 1;
+    int16_t ddF_y = -2 * r;
+    int16_t x = 0;
+    int16_t y = r;
 
     DrawPixel(x0  , y0+r, color);
     DrawPixel(x0  , y0-r, color);
@@ -207,8 +207,8 @@ void DrawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color) {
     }
 }
 
-void DrawFullRect(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t color) {
-    for (uint8_t i=x; i<x+w; i++) {
+void DrawFullRect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color) {
+    for (int16_t i=x; i<x+w; i++) {
         DrawLine(i, y, i, h, color);
     }
 }
