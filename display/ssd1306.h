@@ -27,6 +27,23 @@ const uint32_t BatteryBar16_data[] = {
    0b00000111111111111111111111100000UL,
 };
 
+const uint32_t BatteryIcon[] = {
+    0b00111100UL,
+    0b00100100UL,
+    0b11111111UL,
+    0b10000001UL,
+    0b10000001UL,
+    0b10000001UL,
+    0b10000001UL,
+    0b10000001UL,
+    0b10000001UL,
+    0b10000001UL,
+    0b10000001UL,
+    0b10000001UL,
+    0b10000001UL,
+    0b11111111UL,
+};
+
 #define BLACK 0
 #define WHITE 1
 #define INVERSE 2
@@ -34,6 +51,8 @@ const uint32_t BatteryBar16_data[] = {
 #define GLYPHDATA(X) NELEM(X), X
 
 const Glyph BatteryBar16 = { 16, 0, 0, GLYPHDATA(BatteryBar16_data) };
+
+const Glyph BatteryIndicator = { 15, 0, 0, GLYPHDATA(BatteryIcon) };
 
 #include "StarJedi10Font.h"
 
@@ -291,6 +310,19 @@ void DrawScreenSaver( const char* text){
     yPosition += yDirection;  
 }
 
+void LightSpeed(){
+  
+}
+void RainScreen(){
+  
+}
+
+void DrawScreenSaver(int16_t x, int16_t y) {
+ Draw( BatteryIndicator,x,y);
+ int battery_bars = floor(clamp(battery_monitor.battery_percent(),0,100) * (0.5 + 8) / 100);
+ DrawFullRect(x+4+8-battery_bars , y+2,battery_bars ,4,WHITE);
+ DrawText(GfxBatteryPercentage(),BatteryIndicator.skip, y+10, FONT_NAME);
+}
 char* GfxBatteryPercentage(void){
   static char bat_info[6];
   static uint32_t ref_time=0;
