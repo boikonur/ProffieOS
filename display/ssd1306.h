@@ -207,6 +207,12 @@ void DrawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t color) {
     }
 }
 
+void DrawTriangle(int16_t  x0, int16_t  y0, int16_t  x1, int16_t  y1, int16_t  x2, int16_t  y2, int16_t  color) {
+    DrawLine(x0, y0, x1, y1, color);
+    DrawLine(x1, y1, x2, y2, color);
+    DrawLine(x2, y2, x0, y0, color);
+}
+
 void DrawFullRect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color) {
     for (int16_t i=x; i<x+w; i++) {
         DrawLine(i, y, i, h, color);
