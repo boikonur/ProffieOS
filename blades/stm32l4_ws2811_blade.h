@@ -2,51 +2,54 @@
 #define BLADES_WS2811_BLADE_H
 
 #ifdef ENABLE_WS2811
-#ifdef TEENSYDUINO
-#include "monopodws.h"
-#else
-#include "stm32_ws2811.h"
-#endif
+#include "stm32l4_ws2811.h"
 
 // WS2811-type blade implementation.
 // Note that this class does nothing when first constructed. It only starts
 // interacting with pins and timers after Activate() is called.
 class WS2811_Blade : public SaberBase, CommandParser, Looper, public BladeBase {
 public:
-  WS2811_Blade(int num_leds, uint8_t config, int pin, PowerPinInterface* power) :
+  WS2811_Blade(int num_leds,
+	       int data_pin,
+	       WS2811Pin::Byteorder byteorder,
+	       int frequency,
+	       int reset_us,
+	       int t0h_us,
+	       int t1h_us,
+	       PowerPinInterface* power) :
     SaberBase(NOLINK),
     CommandParser(NOLINK),
     Looper(NOLINK),
-    num_leds_(num_leds),
-    config_(config),
-    pin_(pin),
     power_(power) {
+    pin_.begin(data_pin, num_leds, byteorder, frequency, reset_us, t0h_us, t1h_us);
   }
   const char* name() override { return "WS2811_Blade"; }
 
   void Power(bool on) {
-    while (monopodws.busy());
+    while (!pin_.IsReadyForEndFrame());
+    pinMode(pin_.pin(), on ? OUTPUT : INPUT);
     power_->Power(on);
-//    pinMode(bladePin, on ? OUTPUT : INPUT);
     powered_ = on;
     allow_disable_ = false;
+    if (on) EnableBooster();
   }
 
   // No need for a "deactivate", the blade stays active until
   // you take it out, which also cuts the power.
   void Activate() override {
     STDOUT.print("WS2811 Blade with ");
-    STDOUT.print(num_leds_);
-    STDOUT.println(" leds");
+    STDOUT.print(pin_.num_leds());
+    STDOUT.println(" leds.");
     power_->Init();
     Power(true);
     delay(10);
-    while (monopodws.busy());
-    monopodws.begin(num_leds_, displayMemory, config_, pin_);
-    monopodws.show();  // Make it black
-    monopodws.show();  // Make it black
-    monopodws.show();  // Make it black
-    while (monopodws.busy());
+    pin_.BeginFrame();
+    for (int i = 0; i < pin_.num_leds(); i++) pin_.Set(i, Color16());
+    pin_.EndFrame();
+    pin_.BeginFrame();
+    pin_.EndFrame();
+    pin_.BeginFrame();
+    pin_.EndFrame();
     CommandParser::Link();
     Looper::Link();
     SaberBase::Link(this);
@@ -54,13 +57,13 @@ public:
 
   // BladeBase implementation
   int num_leds() const override {
-    return num_leds_;
+    return pin_.num_leds();
   }
   bool is_on() const override {
     return on_;
   }
   void set(int led, Color16 c) override {
-    monopodws.setPixel(led, c.dither(0));
+    color_buffer[led] = c;
   }
   bool clash() override {
     bool ret = clash_;
@@ -70,7 +73,6 @@ public:
   void allow_disable() override {
     if (!on_) allow_disable_ = true;
   }
-
   // SaberBase implementation.
   void SB_IsOn(bool* on) override {
     if (on_) *on = true;
@@ -126,11 +128,11 @@ protected:
         }
         current_blade = this;
         current_style_->run(this);
-        while (monopodws.busy()) YIELD();
-#if NUM_BLADES > 1
-        monopodws.begin(num_leds_, displayMemory, config_, pin_);
-#endif
-        monopodws.show();
+	while (!pin_.IsReadyForBeginFrame()) YIELD();
+	pin_.BeginFrame();
+	for (int i = 0; i < pin_.num_leds(); i++) pin_.Set(i, color_buffer[i]);
+	while (!pin_.IsReadyForEndFrame()) YIELD();
+	pin_.EndFrame();
         loop_counter_.Update();
         current_blade = NULL;
         YIELD();
@@ -139,27 +141,63 @@ protected:
   }
 
 private:
-  int num_leds_;
-  uint8_t config_;
-  uint8_t pin_;
   bool on_ = false;
   bool powered_ = false;
   bool clash_ = false;
   bool allow_disable_ = false;
   LoopCounter loop_counter_;
 
+  static Color16 color_buffer[maxLedsPerStrip];
   static WS2811_Blade* current_blade;
   StateMachineState state_machine_;
   PowerPinInterface* power_;
+  WS2811Pin pin_;
 };
 
+Color16 WS2811_Blade::color_buffer[maxLedsPerStrip];
 WS2811_Blade* WS2811_Blade::current_blade = NULL;
+
+#define WS2811_RGB      0       // The WS2811 datasheet documents this way
+#define WS2811_RBG      1
+#define WS2811_GRB      2       // Most LED strips are wired this way
+#define WS2811_GBR      3
+
+#define WS2811_800kHz 0x00      // Nearly all WS2811 are 800 kHz
+#define WS2811_400kHz 0x10      // Adafruit's Flora Pixels
+#define WS2813_800kHz 0x20      // WS2813 are close to 800 kHz but has 300 us frame set delay
+#define WS2811_580kHz 0x30      // PL9823
+#define WS2811_ACTUALLY_800kHz 0x40      // Normally we use 740kHz instead of 800, this uses 800.
 
 template<int LEDS, int CONFIG, int DATA_PIN = bladePin, class POWER_PINS = PowerPINS<bladePowerPin1, bladePowerPin2, bladePowerPin3> >
 class WS2811_Blade *WS2811BladePtr() {
   static_assert(LEDS <= maxLedsPerStrip, "update maxLedsPerStrip");
   static POWER_PINS power_pins;
-  static WS2811_Blade blade(LEDS, CONFIG, DATA_PIN, &power_pins);
+  typename WS2811Pin::Byteorder byteorder = WS2811Pin::BGR;
+  switch (CONFIG & 0xf) {
+    case WS2811_RGB: byteorder = WS2811Pin::RGB; break;
+    case WS2811_RBG: byteorder = WS2811Pin::RBG; break;
+    case WS2811_GRB: byteorder = WS2811Pin::GRB; break;
+    case WS2811_GBR: byteorder = WS2811Pin::GBR; break;
+  }
+
+  int frequency = 800000;
+  int reset_us = 300;
+  switch (CONFIG & 0xf0) {
+    case WS2811_800kHz:
+      frequency = 740000;
+      break;
+    case WS2811_400kHz:
+      frequency = 400000;
+      break;
+    case WS2813_800kHz:
+    case WS2811_ACTUALLY_800kHz:
+      frequency = 800000;
+      break;
+  }
+    
+  static WS2811_Blade blade(LEDS, DATA_PIN, byteorder,
+			    frequency, reset_us,
+			    294, 862, &power_pins);
   return &blade;
 }
 #endif

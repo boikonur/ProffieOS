@@ -21,14 +21,14 @@
 // You can have multiple configuration files, and specify which one
 // to use here.
 
-#define CONFIG_FILE "config/default_v3_config.h"
+// #define CONFIG_FILE "config/default_v3_config.h"
 // #define CONFIG_FILE "config/crossguard_config.h"
 // #define CONFIG_FILE "config/graflex_v1_config.h"
 // #define CONFIG_FILE "config/prop_shield_fastled_v1_config.h"
 // #define CONFIG_FILE "config/owk_v2_config.h"
 // #define CONFIG_FILE "config/test_bench_config.h"
 // #define CONFIG_FILE "config/toy_saber_config.h"
-// #define CONFIG_FILE "config/proffieboard_v1_test_bench_config.h"
+#define CONFIG_FILE "config/proffieboard_v1_test_bench_config.h"
 
 #ifdef CONFIG_FILE_TEST
 #undef CONFIG_FILE
@@ -39,7 +39,7 @@
 #include CONFIG_FILE
 #undef CONFIG_TOP
 
-// #define ENABLE_DEBUG
+#define ENABLE_DEBUG
 
 //
 // OVERVIEW
@@ -140,6 +140,7 @@
 #include <stm32l4_dma.h>
 #include <stm32l4_system.h>
 #include <arm_math.h>
+#include <STM32.h>
 #define DMAChannel stm32l4_dma_t
 #define DMAMEM
 #define NVIC_SET_PRIORITY(X,Y) NVIC_SetPriority((X), (IRQn_Type)(Y))
@@ -259,7 +260,7 @@ CommandParser* parsers = NULL;
 MonitorHelper monitor_helper;
 
 #include "common/vec3.h"
-#include "common/linked_ptr.h"
+#include "common/ref.h"
 
 enum BUTTON : uint32_t {
   BUTTON_NONE = 0,   // used for gestures and the like
@@ -300,6 +301,8 @@ SaberBase* saberbases = NULL;
 SaberBase::LockupType SaberBase::lockup_ = SaberBase::LOCKUP_NONE;
 size_t SaberBase::num_blasts_ = 0;
 struct SaberBase::Blast SaberBase::blasts_[3];
+bool SaberBase::on_ = false;
+uint32_t SaberBase::last_motion_request_ = 0;
 
 #include "common/box_filter.h"
 
@@ -326,6 +329,9 @@ int16_t clamptoi16(int32_t x) {
 }
 
 #include "common/sin_table.h"
+
+void EnableBooster();
+void EnableAmplifier();
 
 #ifdef ENABLE_AUDIO
 
@@ -447,18 +453,25 @@ size_t WhatUnit(class BufferedWavPlayer* player);
 #include "sound/buffered_wav_player.h"
 
 BufferedWavPlayer wav_players[6];
-size_t reserved_wav_players = 0;
 
-class BufferedWavPlayer* GetFreeWavPlayer()  {
+RefPtr<BufferedWavPlayer> GetFreeWavPlayer()  {
   // Find a free wave playback unit.
-  for (size_t unit = reserved_wav_players;
-       unit < NELEM(wav_players); unit++) {
-    if (!wav_players[unit].isPlaying()) {
+  for (size_t unit = 0; unit < NELEM(wav_players); unit++) {
+    if (wav_players[unit].Available()) {
       wav_players[unit].reset_volume();
-      return wav_players + unit;
+      return RefPtr<BufferedWavPlayer>(wav_players + unit);
     }
   }
-  return NULL;
+  return RefPtr<BufferedWavPlayer>();
+}
+
+RefPtr<BufferedWavPlayer> RequireFreeWavPlayer()  {
+  while (true) {
+    RefPtr<BufferedWavPlayer> ret = GetFreeWavPlayer();
+    if (ret) return ret;
+    STDOUT.println("Failed to get hum player, trying again!");
+    delay(100);
+  }
 }
 
 size_t WhatUnit(class BufferedWavPlayer* player) {
@@ -471,11 +484,14 @@ size_t WhatUnit(class BufferedWavPlayer* player) {
 VolumeOverlay<AudioSplicer> audio_splicer;
 
 void SetupStandardAudioLow() {
+  audio_splicer.Deactivate();
   for (size_t i = 0; i < NELEM(wav_players); i++) {
+    if (wav_players[i].refs() != 0) {
+      STDOUT.println("WARNING, wav player still referenced!");
+    }
     dynamic_mixer.streams_[i] = wav_players + i;
     wav_players[i].reset_volume();
   }
-  reserved_wav_players = 0;
   dynamic_mixer.streams_[NELEM(wav_players)] = &beeper;
   dynamic_mixer.streams_[NELEM(wav_players)+1] = &talkie;
 }
@@ -489,10 +505,7 @@ void SetupStandardAudio() {
 void ActivateAudioSplicer() {
   dac.SetStream(NULL);
   SetupStandardAudioLow();
-  dynamic_mixer.streams_[0] = &audio_splicer;
-  dynamic_mixer.streams_[1] = NULL;
-  reserved_wav_players = 2;
-  audio_splicer.set_crossover_time(0.003);
+  audio_splicer.Activate();
   dac.SetStream(&dynamic_mixer);
 }
 
@@ -510,7 +523,7 @@ public:
   void SB_On() override {}
   void SB_Off() override {}
 
-  void SB_Motion(const Vec3& speed) override {
+  void SB_Motion(const Vec3& speed, bool clear) override {
     // Adjust hum volume based on motion speed
   }
 };
@@ -553,6 +566,7 @@ public:
   const char* name() override { return "BatteryMonitor"; }
   float battery_now() {
     // This is the volts on the battery monitor pin.
+    // TODO: analogRead can be very slow, make an async one and/or read it less often.
     float volts = 3.3 * analogRead(batteryLevelPin) / 1024.0;
 #ifdef V2
     float pulldown = 220000;  // External pulldown
@@ -589,8 +603,12 @@ protected:
 #endif
   }
   void Loop() override {
-    float v = battery_now();
-    last_voltage_ = last_voltage_ * 0.999 + v * 0.001;
+    uint32_t now = millis();
+    if (last_voltage_read_time_ != now) {
+      float v = battery_now();
+      last_voltage_ = last_voltage_ * 0.999 + v * 0.001;
+      last_voltage_read_time_ = now;
+    }
     if (monitor.ShouldPrint(Monitoring::MonitorBattery) ||
         millis() - last_print_millis_ > 20000) {
       STDOUT.print("Battery voltage: ");
@@ -625,6 +643,7 @@ protected:
 private:
   bool loaded_ = false;
   float last_voltage_ = 0.0;
+  uint32_t last_voltage_read_time_ = 0;
   float old_voltage_ = 0.0;
   float really_old_voltage_ = 0.0;
   uint32_t last_print_millis_;
@@ -635,7 +654,6 @@ BatteryMonitor battery_monitor;
 
 #include "common/color.h"
 #include "common/range.h"
-#include "blades/monopodws.h"
 #include "blades/blade_base.h"
 #include "blades/blade_wrapper.h"
 
@@ -661,6 +679,7 @@ struct is_same_type<T, T> { static const bool value = true; };
 #define StyleAllocator class StyleFactory*
 
 #include "styles/rgb.h"
+#include "styles/rgb_arg.h"
 #include "styles/charging.h"
 #include "styles/fire.h"
 #include "styles/gradient.h"
@@ -690,6 +709,7 @@ struct is_same_type<T, T> { static const bool value = true; };
 #include "functions/ifon.h"
 #include "functions/change_slowly.h"
 #include "functions/int.h"
+#include "functions/int_arg.h"
 #include "functions/sin.h"
 #include "functions/scale.h"
 
@@ -754,10 +774,13 @@ class NoLED;
 #include "blades/power_pin.h"
 #include "blades/drive_logic.h"
 #include "blades/pwm_pin.h"
+#ifdef TEENSYDUINO
 #include "blades/ws2811_blade.h"
+#else
+#include "blades/stm32l4_ws2811_blade.h"
+#endif
 #include "blades/fastled_blade.h"
 #include "blades/simple_blade.h"
-#include "blades/string_blade.h"
 #include "blades/sub_blade.h"
 #include "blades/leds.h"
 
@@ -827,40 +850,32 @@ public:
   Saber() : CommandParser() {}
   const char* name() override { return "Saber"; }
 
-  bool IsOn() const {
-    return on_;
-  }
-
   BladeStyle* current_style(){
     return current_config_->blade1->current_style();
   }
 
   bool NeedsPower() {
-    if (on_) return true;
+    if (SaberBase::IsOn()) return true;
     if (current_style() && current_style()->NoOnOff())
       return true;
     return false;
   }
 
   void On() {
-    if (on_) return;
+    if (SaberBase::IsOn()) return;
     if (current_style() && current_style()->NoOnOff())
       return;
     STDOUT.println("Ignition.");
-    digitalWrite(amplifierPin, HIGH); // turn on the amplifier
-    delay(10);             // allow time to wake up
-
-    on_ = true;
-    SaberBase::DoOn();
+    EnableAmplifier();
+    SaberBase::TurnOn();
   }
 
   void Off() {
-    on_ = false;
     if (SaberBase::Lockup()) {
       SaberBase::SetLockup(SaberBase::LOCKUP_NONE);
       SaberBase::DoEndLockup();
     }
-    SaberBase::DoOff();
+    SaberBase::TurnOff();
   }
 
   uint32_t last_clash_ = 0;
@@ -878,7 +893,7 @@ public:
       clash_timeout_ = 400;  // For events, space clashes out more.
     } else {
       clash_timeout_ = 100;
-      if (on_) SaberBase::DoClash();
+      if (SaberBase::IsOn()) SaberBase::DoClash();
     }
     last_clash_ = t;
   }
@@ -1058,7 +1073,8 @@ public:
 
   float peak = 0.0;
   Vec3 at_peak;
-  void SB_Accel(const Vec3& accel) override {
+  void SB_Accel(const Vec3& accel, bool clear) override {
+    if (clear) accel_ = accel;
     float v = (accel_ - accel).len();
     // If we're spinning the saber, require a stronger acceleration
     // to activate the clash.
@@ -1168,7 +1184,11 @@ public:
 
   BoxFilter<Vec3, 5> gyro_filter_;
   Vec3 filtered_gyro_;
-  void SB_Motion(const Vec3& gyro) override {
+  void SB_Motion(const Vec3& gyro, bool clear) override {
+    if (clear)
+      for (int i = 0; i < 4; i++)
+	gyro_filter_.filter(gyro);
+
     filtered_gyro_ = gyro_filter_.filter(gyro);
     if (monitor.ShouldPrint(Monitoring::MonitorGyro)) {
       // Got gyro data
@@ -1191,16 +1211,16 @@ protected:
   Vec3 accel_;
   bool pointing_down_ = false;
 #ifdef ENABLE_AUDIO
-  BufferedWavPlayer* track_player_ = NULL;
+  RefPtr<BufferedWavPlayer> track_player_;
 #endif
 
   void StartOrStopTrack() {
 #ifdef ENABLE_AUDIO
     if (track_player_) {
       track_player_->Stop();
-      track_player_ = NULL;
+      track_player_.Free();
     } else {
-      digitalWrite(amplifierPin, HIGH); // turn on the amplifier
+      EnableAmplifier();
       track_player_ = GetFreeWavPlayer();
       if (track_player_) {
         track_player_->Play(current_preset_->track);
@@ -1219,7 +1239,7 @@ protected:
   void Loop() override {
     if (battery_monitor.low()) {
       if (current_preset_->style_allocator1 != &style_charging) {
-        if (on_) {
+        if (SaberBase::IsOn()) {
           STDOUT.print("Battery low, turning off. Battery voltage: ");
           STDOUT.println(battery_monitor.battery());
           Off();
@@ -1235,7 +1255,7 @@ protected:
     }
 #ifdef ENABLE_AUDIO
     if (track_player_ && !track_player_->isPlaying()) {
-      track_player_ = NULL;
+      track_player_.Free();
     }
 #endif
   }
@@ -1282,17 +1302,17 @@ public:
       STDOUT.print(" mods ");
       PrintButton(current_modifiers);
     }
-    if (on_) STDOUT.print(" ON");
+    if (SaberBase::IsOn()) STDOUT.print(" ON");
     STDOUT.println("");
 
 #define EVENTID(BUTTON, EVENT, MODIFIERS) (((EVENT) << 24) | ((BUTTON) << 12) | ((MODIFIERS) & ~(BUTTON)))
-    if (on_ && aux_on_) {
+    if (SaberBase::IsOn() && aux_on_) {
       if (button == BUTTON_POWER) button = BUTTON_AUX;
       if (button == BUTTON_AUX) button = BUTTON_POWER;
     }
     
     bool handled = true;
-    switch (EVENTID(button, event, current_modifiers | (on_ ? MODE_ON : MODE_OFF))) {
+    switch (EVENTID(button, event, current_modifiers | (SaberBase::IsOn() ? MODE_ON : MODE_OFF))) {
       default:
         handled = false;
         break;
@@ -1336,11 +1356,6 @@ public:
         Off();
         break;
 
-      case EVENTID(BUTTON_POWER, EVENT_DOUBLE_CLICK, MODE_ON):
-      case EVENTID(BUTTON_POWER, EVENT_DOUBLE_CLICK, MODE_OFF):
-        SaberBase::DoSpeedup();
-        break;
-
       case EVENTID(BUTTON_POWER, EVENT_CLICK_LONG, MODE_ON):
         SaberBase::DoForce();
         break;
@@ -1371,6 +1386,10 @@ public:
         StartOrStopTrack();
         break;
 
+      case EVENTID(BUTTON_POWER, EVENT_PRESSED, MODE_OFF):
+	SaberBase::RequestMotion();
+	break;
+
       case EVENTID(BUTTON_NONE, EVENT_CLASH, MODE_OFF | BUTTON_POWER):
         next_preset();
         break;
@@ -1390,7 +1409,7 @@ public:
     if (!handled) {
       // Events that needs to be handled regardless of what other buttons
       // are pressed.
-      switch (EVENTID(button, event, on_ ? MODE_ON : MODE_OFF)) {
+      switch (EVENTID(button, event, SaberBase::IsOn() ? MODE_ON : MODE_OFF)) {
 	case EVENTID(BUTTON_POWER, EVENT_RELEASED, MODE_ON):
 	case EVENTID(BUTTON_AUX, EVENT_RELEASED, MODE_ON):
 	  if (SaberBase::Lockup()) {
@@ -1425,7 +1444,7 @@ public:
       return true;
     }
     if (!strcmp(cmd, "get_on")) {
-      STDOUT.println(on_);
+      STDOUT.println(SaberBase::IsOn());
       return true;
     }
     if (!strcmp(cmd, "clash")) {
@@ -1474,8 +1493,8 @@ public:
         StartOrStopTrack();
         return true;
       }
-      digitalWrite(amplifierPin, HIGH); // turn on the amplifier
-      BufferedWavPlayer* player = GetFreeWavPlayer();
+      EnableAmplifier();
+      RefPtr<BufferedWavPlayer> player = GetFreeWavPlayer();
       if (player) {
         STDOUT.print("Playing ");
         STDOUT.println(arg);
@@ -1492,9 +1511,9 @@ public:
       }
       if (track_player_) {
         track_player_->Stop();
-        track_player_ = NULL;
+        track_player_.Free();
       }
-      digitalWrite(amplifierPin, HIGH); // turn on the amplifier
+      EnableAmplifier();
       track_player_ = GetFreeWavPlayer();
       if (track_player_) {
         STDOUT.print("Playing ");
@@ -1508,7 +1527,7 @@ public:
     if (!strcmp(cmd, "stop_track")) {
       if (track_player_) {
         track_player_->Stop();
-        track_player_ = NULL;
+        track_player_.Free();
       }
       return true;
     }
@@ -1670,8 +1689,6 @@ public:
 private:
   BladeConfig* current_config_ = NULL;
   Preset* current_preset_ = NULL;
-
-  bool on_;  // <- move to SaberBase
 };
 
 Saber saber;
@@ -1724,7 +1741,11 @@ Script script;
 
 #include "buttons/latching_button.h"
 #include "buttons/button.h"
+#ifdef TEENSYDUINO
 #include "buttons/touchbutton.h"
+#else
+#include "buttons/stm32l4_touchbutton.h"
+#endif
 
 #define CONFIG_BUTTONS
 #include CONFIG_FILE
@@ -1873,10 +1894,34 @@ class Commands : public CommandParser {
       return true;
     }
 #endif
+    if (!strcmp(cmd, "high") && e) {
+      digitalWrite(atoi(e), HIGH);
+      STDOUT.println("Ok.");
+      return true;
+    }
+    if (!strcmp(cmd, "low") && e) {
+      digitalWrite(atoi(e), LOW);
+      STDOUT.println("Ok.");
+      return true;
+    }
+#if VERSION_MAJOR >= 4
+    if (!strcmp(cmd, "booster")) {
+       if (!strcmp(e, "on")) {
+         digitalWrite(boosterPin, HIGH);
+         STDOUT.println("Booster on.");
+         return true;
+       }
+       if (!strcmp(e, "off")) {
+         digitalWrite(boosterPin, LOW);
+         STDOUT.println("Booster off.");
+         return true;
+       }
+    }
+#endif
 #ifdef ENABLE_AUDIO
 #if 0
     if (!strcmp(cmd, "ton")) {
-      digitalWrite(amplifierPin, HIGH); // turn on the amplifier
+      EnableAmplifier();
       dac.SetStream(&saber_synth);
       saber_synth.on_ = true;
       return true;
@@ -1988,13 +2033,15 @@ class Commands : public CommandParser {
       STDOUT.println(version);
       return true;
     }
-#ifdef TEENSYDUINO    
     if (!strcmp(cmd, "reset")) {
+#ifdef TEENSYDUINO    
       SCB_AIRCR = 0x05FA0004;
+#else
+      STM32.reset();
+#endif      
       STDOUT.println("Reset failed.");
       return true;
     }
-#endif    
     return false;
   }
 
@@ -2018,7 +2065,10 @@ Commands commands;
 
 class SerialAdapter {
 public:
-  static void begin() { Serial.begin(115200); }
+  static void begin() {
+    // Already configured in Setup().
+    // Serial.begin(115200);
+  }
   static bool Connected() { return !!Serial; }
   static bool AlwaysConnected() { return false; }
   static Stream& stream() { return Serial; }
@@ -2041,11 +2091,11 @@ public:
 template<class SA> /* SA = Serial Adapter */
 class Parser : Looper, StateMachine {
 public:
-  Parser() : Looper(), len_(0) {
-  }
+  Parser() : Looper() {}
   const char* name() override { return "Parser"; }
 
   void Setup() override {
+    ScopedPinTracer tracer(17);
     SA::begin();
   }
 
@@ -2061,6 +2111,10 @@ public:
         while (!SA::stream().available()) YIELD();
         int c = SA::stream().read();
         if (c < 0) { break; }
+#if 0	
+	STDOUT.print("GOT:");
+	STDOUT.println(c);
+#endif	
 #if 0
         if (monitor.IsMonitoring(Monitoring::MonitorSerial) &&
             default_output != &SA::stream()) {
@@ -2254,6 +2308,11 @@ SSD1306 display;
 #endif
 
 #ifdef ENABLE_MOTION
+
+#ifndef ORIENTATION
+#define ORIENTATION ORIENTATION_NORMAL
+#endif
+
 #include "motion/mpu6050.h"
 #include "motion/lsm6ds3h.h"
 #include "motion/fxos8700.h"
@@ -2333,114 +2392,22 @@ ACCEL_CLASS accelerometer;
 
 #endif   // ENABLE_MOTION
 
-#ifdef ENABLE_AUDIO
-// Turns off amplifier when no audio is played.
-// Maybe name this IdleHelper or something instead??
-class Amplifier : Looper, StateMachine, CommandParser {
-public:
-  Amplifier() : Looper(), CommandParser() {}
-  const char* name() override { return "Amplifier"; }
-
-  bool Active() {
-//    if (saber_synth.on_) return true;
-    if (audio_splicer.isPlaying()) return true;
-    if (beeper.isPlaying()) return true;
-    if (talkie.isPlaying()) return true;
-    for (size_t i = 0; i < NELEM(wav_players); i++)
-      if (wav_players[i].isPlaying())
-        return true;
-    return false;
-  }
-
-protected:
-  void Setup() override {
-    // Audio setup
-    delay(50);             // time for DAC voltage stable
-    pinMode(amplifierPin, OUTPUT);
-    delay(10);
-    SetupStandardAudio();
-  }
-
-  void Loop() override {
-    STATE_MACHINE_BEGIN();
-    while (true) {
-      while (Active()) YIELD();
-      SLEEP(20);
-      if (Active()) continue;
-      STDOUT.println("Amplifier off.");
-      digitalWrite(amplifierPin, LOW); // turn the amplifier off
-      while (!Active()) YIELD();
-    }
-    STATE_MACHINE_END();
-  }
-
-  bool Parse(const char *cmd, const char* arg) override {
-    if (!strcmp(cmd, "amp")) {
-      if (!strcmp(arg, "on")) {
-        digitalWrite(amplifierPin, HIGH); // turn the amplifier off
-        return true;
-      }
-      if (!strcmp(arg, "off")) {
-        digitalWrite(amplifierPin, LOW); // turn the amplifier off
-        return true;
-      }
-    }
-    if (!strcmp(cmd, "whatison")) {
-      bool on = false;
-      SaberBase::DoIsOn(&on);
-      STDOUT.print("Saber bases: ");
-      STDOUT.println(on ? "On" : "Off");
-      STDOUT.print("Audio splicer: ");
-      STDOUT.println(audio_splicer.isPlaying() ? "On" : "Off");
-      STDOUT.print("Beeper: ");
-      STDOUT.println(beeper.isPlaying() ? "On" : "Off");
-      STDOUT.print("Talker: ");
-      STDOUT.println(talkie.isPlaying() ? "On" : "Off");
-      for (size_t i = 0; i < NELEM(wav_players); i++) {
-        STDOUT.print("Wav player ");
-        STDOUT.print(i);
-        STDOUT.print(": ");
-        STDOUT.print(wav_players[i].isPlaying() ? "On" : "Off");
-        STDOUT.print(" (eof =  ");
-        STDOUT.print(wav_players[i].eof());
-        STDOUT.print(" volume = ");
-        STDOUT.print(wav_players[i].volume());
-        STDOUT.println(")");
-      }
-      return true;
-    }
-    return false;
-  }
-
-  void Help() {
-    STDOUT.println(" amp on/off - turn amplifier on or off");
-  }
-};
-
-Amplifier amplifier;
-#endif
+#include "sound/amplifier.h"
+#include "common/booster.h"
 
 void setup() {
-#if 0
-//  pinMode(bladePin, OUTPUT);
-  pinMode(bladePowerPin1, OUTPUT);
-  pinMode(bladePowerPin2, OUTPUT);
-  pinMode(bladePowerPin3, OUTPUT);
-//  digitalWrite(bladePin, LOW);
-  digitalWrite(bladePowerPin1, LOW);
-  digitalWrite(bladePowerPin2, LOW);
-  digitalWrite(bladePowerPin3, LOW);
-#ifdef V2
-  pinMode(bladePowerPin4, OUTPUT);
-  pinMode(bladePowerPin5, OUTPUT);
-  pinMode(bladePowerPin6, OUTPUT);
-  digitalWrite(bladePowerPin4, LOW);
-  digitalWrite(bladePowerPin5, LOW);
-  digitalWrite(bladePowerPin6, LOW);
-#endif
+#if VERSION_MAJOR >= 4
+  // TODO enable/disable as needed
+  pinMode(boosterPin, OUTPUT);
+  digitalWrite(boosterPin, HIGH);
 #endif
 
   Serial.begin(9600);
+#if VERSION_MAJOR >= 4
+  // TODO: Figure out if we need this.
+  Serial.blockOnOverrun(false);
+#endif
+    
   // Wait for all voltages to settle.
   // Accumulate some entrypy while we wait.
   uint32_t now = millis();
@@ -2459,13 +2426,13 @@ void setup() {
     STDOUT.println("Sdcard found..");
   }
 #endif
-  // Time to identify the blade.
+
   Looper::DoSetup();
+  // Time to identify the blade.
   saber.FindBlade();
   SaberBase::DoBoot();
 #if defined(ENABLE_SD) && defined(ENABLE_AUDIO)
   if (!sd_card_found) {
-    digitalWrite(amplifierPin, HIGH); // turn on the amplifier
     talkie.Say(talkie_sd_card_15, 15);
     talkie.Say(talkie_not_found_15, 15);
   }
@@ -2513,22 +2480,6 @@ extern "C" void startup_early_hook(void) {
 #endif
 #if defined(__MK66FX1M0__)
         LMEM_PCCCR = 0x85000003;
-#endif
-        
-#define SETUP_PIN(X) do {                                               \
- CORE_PIN##X##_PORTREG &=~ CORE_PIN##X##_BITMASK;                       \
- CORE_PIN##X##_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);  \
- CORE_PIN##X##_DDRREG |= CORE_PIN##X##_BITMASK;                         \
-} while (0)
-
-  SETUP_PIN(20);
-  SETUP_PIN(21);
-  SETUP_PIN(22);
-  SETUP_PIN(23);
-#ifdef V2
-  SETUP_PIN(3);
-  SETUP_PIN(4);
-  SETUP_PIN(5);
 #endif
 }
 #endif
@@ -2583,7 +2534,6 @@ void loop() {
 #endif
   Looper::DoLoop();
 
-#if defined(ENABLE_SNOOZE)
   bool on = false;
   SaberBase::DoIsOn(&on);
   if (!on && !Serial && !saber.NeedsPower()
@@ -2592,12 +2542,20 @@ void loop() {
 #endif
     ) {
     if (millis() - last_activity > 1000) {
+#if VERSION_MAJOR >= 4
+      // stm32l4_system_sysclk_configure(1000000, 500000, 500000);
+      // Delay will enter low-power mode.
+      delay(50);         // 13.8 mA
+      // STM32.stop(50);  // 12.4 mA
+      // stm32l4_system_sysclk_configure(_SYSTEM_CORE_CLOCK_, _SYSTEM_CORE_CLOCK_/2, _SYSTEM_CORE_CLOCK_/2);
+      
+#elif defined(ENABLE_SNOOZE)
       snooze_timer.setTimer(500);
       Snooze.sleep(snooze_config);
       Serial.begin(9600);
+#endif
     }
   } else {
     last_activity = millis();
   }
-#endif
 }

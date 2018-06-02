@@ -23,11 +23,12 @@ public:
   void Activate() {
     STDOUT.println("Activating polyphonic font.");
     SetupStandardAudio();
-    wav_players[0].set_volume_now(0);
+    hum_player_ = RequireFreeWavPlayer();
+    hum_player_->set_volume_now(0);
     config_.ReadInCurrentDir("config.ini");
     SaberBase::Link(this);
     state_ = STATE_OFF;
-    lock_player_ = NULL;
+    lock_player_.Free();
   }
   enum State {
     STATE_OFF,
@@ -36,15 +37,19 @@ public:
     STATE_HUM_ON,
     STATE_HUM_FADE_OUT,
   };
-  void Deactivate() { SaberBase::Unlink(this); }
+  void Deactivate() {
+    lock_player_.Free();
+    hum_player_.Free();
+    SaberBase::Unlink(this);
+  }
 
   void SB_On() override {
     state_ = STATE_OUT;
-    wav_players[0].PlayOnce(&hum);
-    wav_players[0].PlayLoop(&hum);
+    hum_player_->PlayOnce(&hum);
+    hum_player_->PlayLoop(&hum);
     hum_start_ = millis();
     if (config_.humStart) {
-      BufferedWavPlayer* tmp = Play(&out);
+      RefPtr<BufferedWavPlayer> tmp = Play(&out);
       if (tmp) {
         int delay_ms = 1000 * tmp->length() - config_.humStart;
         if (delay_ms > 0 && delay_ms < 30000) {
@@ -59,9 +64,9 @@ public:
     Play(&in);
   }
 
-  BufferedWavPlayer* Play(Effect* f)  {
-    digitalWrite(amplifierPin, HIGH); // turn on the amplifier
-    BufferedWavPlayer* player = GetFreeWavPlayer();
+  RefPtr<BufferedWavPlayer> Play(Effect* f)  {
+    EnableAmplifier();
+    RefPtr<BufferedWavPlayer> player = GetFreeWavPlayer();
     if (player) {
       player->set_volume_now(config_.volEff / 16.0);
       player->PlayOnce(f);
@@ -75,7 +80,7 @@ public:
   void SB_Boot() override { Play(&boot); }
   void SB_NewFont() override { Play(&font); }
 
-  BufferedWavPlayer* lock_player_ = NULL;
+  RefPtr<BufferedWavPlayer> lock_player_;
   void SB_BeginLockup() override {
     Effect* e = &lock;
     if (SaberBase::Lockup() == SaberBase::LOCKUP_DRAG &&
@@ -94,7 +99,7 @@ public:
     if (lock_player_) {
       lock_player_->set_fade_time(0.3);
       lock_player_->FadeAndStop();
-      lock_player_ = NULL;
+      lock_player_.Free();
     }
   }
 
@@ -126,21 +131,22 @@ public:
       case STATE_HUM_ON:
         break;
       case STATE_HUM_FADE_OUT: {
+	SaberBase::RequestMotion();
         uint32_t delta = m - last_micros_;
         volume_ -= (delta / 1000000.0) / 0.2; // 0.2 seconds
         if (volume_ <= 0.0f) {
           volume_ = 0.0f;
           state_ = STATE_OFF;
-	  wav_players[0].FadeAndStop();
+	  hum_player_->FadeAndStop();
         }
         break;
       }
     }
     last_micros_ = m;
-    wav_players[0].set_volume(vol * volume_);
+    hum_player_->set_volume(vol * volume_);
   }
   
-  void SB_Motion(const Vec3& gyro) override {
+  void SB_Motion(const Vec3& gyro, bool clear) override {
     float speed = sqrt(gyro.z * gyro.z + gyro.y * gyro.y);
     if (speed > 250.0) {
       if (!swinging_ && state_ != STATE_OFF) {
@@ -157,6 +163,7 @@ public:
     SetHumVolume(vol);
   }
 
+  RefPtr<BufferedWavPlayer> hum_player_;
   IgniterConfigFile config_;
   State state_;
   float volume_;

@@ -6,52 +6,58 @@
 #define VERSION_MINOR 1
 #define V2
 #define V3
+#define PROFFIEBOARD
 #define USE_I2S
 #define GYRO_CLASS LSM6DS3H
 
-// Teensy 3.2 pin map:
-// A lot of these can be changed, but be careful, because:
-//   o The pins used by the prop shield cannot be easily changed.
-//   o Pins that are going to control normal LEDs (not neopixels) need PWM capability,
-//     and not all teensy pins can do PWM.
-//   o Touch input is not available on all pins.
-//   o Sdcard chip select pin depends on what shield you use.
-//   o Battery level and blade identification needs analog input, which is not possible
-//     on all pins.
-//
-// See the teensy 3.2 pinout diagram for more info: https://www.pjrc.com/teensy/pinout.html
+// Proffieboard pin map
 enum SaberPins {
-  // Bottom edge (in pin-out diagram)
-  amplifierPin = 1,               // Amplifier enable pin (TeensySaber V2)
-  motionSensorInterruptPin = 2,   // motion sensor interrupt (TeensySaber V2)
-  bladePowerPin4 = -1,             // Optional power control (TeensySaber V2)
-  bladePowerPin5 = -1,             // Optional power control (TeensySaber V2)
-  bladePowerPin6 = -1,             // Optional power control (TeensySaber V2)
-  bladePowerPin3 = -1,            // blade power control
-  spiLedSelect = -1,              // APA102/dotstar chip select
-  spiLedDataOut = 7,
-  spiLedClock = 8,
-  bclkPin = 3,                    // BCLK (digital audio)
-  sdCardSelectPin = 10,
-  spiDataOut = 11,                // spi out, serial flash, spi led & sd card
-  spiDataIn = 12,                 // spi in, serial flash & sd card
+  // I2S
+  bclkPin = 3,                   // BCLK (digital audio)   PB13
+  txd0Pin = 5,                   // TXD0 (digital audio)   PB15
+  lrclkPin = 2,                  // LRCLK (digital audio)  PB12
 
-  // Top edge
-  spiClock = 13,                  // spi clock, flash, spi led & sd card
-  batteryLevelPin = 14,           // battery level input
-  auxPin = 15,                    // AUX button
-  powerButtonPin = 16,            // power button
-  aux2Pin = 17,                   // AUX2 button
+  // I2C
+  i2cDataPin = 7,                 // I2C bus, Used by motion sensors  PB9
+  i2cClockPin = 30,               // I2C bus, Used by motion sensors  PA9
 
-  bladePin = 18,                  // blade control, either WS2811 or PWM
-  bladeIdentifyPin = 19,          // blade identify input / FoC
+  // Buttons
+  powerButtonPin = 21,            // power button  PB6
+  auxPin = 23,                    // AUX button    PB5
+  aux2Pin = 22,                   // AUX2 button   PB4
 
-  i2cDataPin = 20,                // I2C bus, Used by motion sensors
-  i2cClockPin = 21,               // I2C bus, Used by motion sensors
+  // Memory card
+  sdCardSelectPin = 14,           // PA4
+  spiDataOut = 11,                // PA7
+  spiDataIn = 12,                 // PA6
+  spiClock = 13,                  // PA1
 
-  txd0Pin = 5,                   // TXD0 (digital audio)
-  lrclkPin = 2,                  // LRCLK (digital audio)
+  amplifierPin = 26,              // Amplifier enable pin PH1
+  boosterPin = 38,                // Booster enable pin   PH0
+  motionSensorInterruptPin = 39,   // motion sensor interrupt PC13
 
-  bladePowerPin1 = 38,             // blade power control
-  bladePowerPin2 = 26,            // blade power control
+  // No fastled support yet
+  spiLedSelect = -1,
+  spiLedDataOut =-1,
+  spiLedClock = -1,
+
+  // Neopixel pins
+  bladePin = 16,                  // blade control, either WS2811 or PWM  PA4
+  bladeIdentifyPin = 16,          // blade identify input / FoC
+  blade2Pin = 1,                  // PB10
+  blade3Pin = 0,                  // PB11
+
+  // Blade power control
+  bladePowerPin1 = 17,            // blade power control PA3
+  bladePowerPin2 = 31,            // blade power control PA10
+  bladePowerPin3 = 18,            // blade power control PB0
+  bladePowerPin4 = 10,            // blade power control PA8
+  bladePowerPin5 = 4,             // blade power control PB5
+  bladePowerPin6 = 6,             // blade power control PB6
+
+  // Analog pins
+  batteryLevelPin = 19,           // battery level input PB1
+
+  FreePin1 = 15,  // PA5
+  FreePin2 = 24,  // PB3
 };

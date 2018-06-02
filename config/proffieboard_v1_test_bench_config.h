@@ -31,31 +31,23 @@ const unsigned int maxLedsPerStrip = 144;
 // This defines how sensetive the clash detection is.
 #define CLASH_THRESHOLD_G 1.0
 
-// Define this if your power button is a touch button.
-// #define POWER_TOUCHBUTTON_SENSITIVITY 1700
-// #define AUX_TOUCHBUTTON_SENSITIVITY 1700
-// #define AUX2_TOUCHBUTTON_SENSITIVITY 1700
-
-// If your electonics inverts the bladePin for some reason, define this.
-// #define INVERT_WS2811
-
 // Feature defines, these let you turn off large blocks of code
 // used for debugging.
 #define ENABLE_AUDIO
 #define ENABLE_MOTION
 // #define ENABLE_SNOOZE
-// #define ENABLE_WS2811
-// #define ENABLE_SERIAL
+#define ENABLE_WS2811
+#define ENABLE_SERIAL
 
 // Must be 20 characters or less.
-// #define BLE_PASSWORD "password"
+#define BLE_PASSWORD "password"
 
 // FASTLED is experimental and untested right now
 // #define ENABLE_FASTLED
 // #define ENABLE_WATCHDOG
 #define ENABLE_SD
 // #define ENABLE_SERIALFLASH
-// #define ENABLE_SSD1306
+#define ENABLE_SSD1306
 
 // #define ENABLE_DEBUG
 
@@ -67,7 +59,7 @@ typedef RandomFlicker<Rgb<200,200,200>, Rgb<40,40,40>> OnPulse;
 typedef Pulsing<Rgb16<512,512,512>, Rgb16<50,50,50>, 3000> OffPulse;
 
 Preset testing_presets[] = {
-#if 0
+#if 1
   { "font02", "tracks/cantina.wav", 
     StylePtr<InOutHelper<EASYBLADE(OnPulse, WHITE), 300, 800, OffPulse> >(),
     "ONOFF" },
@@ -91,7 +83,8 @@ Preset testing_presets[] = {
 
 BladeConfig blades[] = {
   // Testing configuration.
-  { 130000, SimpleBladePtr<CreeXPE2Red, CreeXPE2Green, Blue3mmLED, NoLED>(), CONFIGARRAY(testing_presets) }
+  { 130000, StringBladePtr<Blue3mmLED>(), CONFIGARRAY(testing_presets) }
+//  { 130000, WS2811BladePtr<5, WS2811_580kHz, blade2Pin, PowerPINS<bladePowerPin1>>(), CONFIGARRAY(testing_presets) }
 };
 
 #endif
@@ -105,4 +98,5 @@ BladeConfig blades[] = {
 LatchingButton PowerButton(BUTTON_POWER, powerButtonPin, "pow");
 Button AuxButton(BUTTON_AUX, auxPin, "aux");
 Button Aux2Button(BUTTON_AUX2, aux2Pin, "aux2");
+// TouchButton Aux2Button(BUTTON_AUX2, aux2Pin, 1700, "aux2");
 #endif

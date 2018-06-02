@@ -171,7 +171,7 @@ void MonopodWS2811::begin(uint32_t numPerStrip,
   int t0h = WS2811_TIMING_T0H;
   int t1h = WS2811_TIMING_T1H;
 
-  frameSetDelay = 50;
+  frameSetDelay = 300;
   switch (params & 0xF0) {
     case WS2811_400kHz:
       frequency = 400000;
@@ -183,7 +183,6 @@ void MonopodWS2811::begin(uint32_t numPerStrip,
 
     case WS2813_800kHz:
       frequency = 740000;
-      frameSetDelay = 300;
       break;
 
     case WS2811_580kHz:
@@ -281,10 +280,9 @@ void MonopodWS2811::begin(uint32_t numPerStrip,
   dma3.source(ones);
   dma3.destination(WS2811_PORT_CLEAR);
   dma3.transferSize(1);
-  dma3.transferCount(bufsize);
+  dma3.transferCount(bufsize + 1);
   dma3.disableOnCompletion();
   dma3.interruptAtCompletion();
-
 
 #if defined(__MK20DX128__)
   // route the edge detect interrupts to trigger the 3 channels
@@ -385,7 +383,6 @@ void CopyOut(int params, class Color8* inbuf, void* frameBuffer, int num) {
    }
 }
 
-
 void MonopodWS2811::show(void)
 {
   // wait for any prior DMA operation
@@ -409,12 +406,13 @@ void MonopodWS2811::show(void)
   update_in_progress = 1;
   //digitalWriteFast(9, HIGH); // oscilloscope trigger
   PORTB_ISFR = (1<<0);    // clear any prior rising edge
-  uint32_t tmp __attribute__((unused));
   FTM1_C0SC = 0x28;
-  tmp = FTM1_C0SC;        // clear any prior timer DMA triggers
+  // Clear any prior timer DMA triggers
+  asm volatile ("" : "=m" (FTM1_C0SC) : "r" (FTM1_C0SC));
   FTM1_C0SC = 0x69;
   FTM1_C1SC = 0x28;
-  tmp = FTM1_C1SC;
+  // Clear any prior timer DMA triggers
+  asm volatile ("" : "=m" (FTM1_C1SC) : "r" (FTM1_C1SC));
   FTM1_C1SC = 0x69;
   dma1.enable();
   dma2.enable();          // enable all 3 DMA channels
@@ -436,12 +434,13 @@ void MonopodWS2811::show(void)
   update_in_progress = 1;
   //digitalWriteFast(9, HIGH); // oscilloscope trigger
   PORTB_ISFR = (1<<18);    // clear any prior rising edge
-  uint32_t tmp __attribute__((unused));
   FTM2_C0SC = 0x28;
-  tmp = FTM2_C0SC;         // clear any prior timer DMA triggers
+  // Clear any prior timer DMA triggers
+  asm volatile ("" : "=m" (FTM2_C0SC) : "r" (FTM2_C0SC));
   FTM2_C0SC = 0x69;
   FTM2_C1SC = 0x28;
-  tmp = FTM2_C1SC;
+  // Clear any prior timer DMA triggers
+  asm volatile ("" : "=m" (FTM2_C1SC) : "r" (FTM2_C1SC));
   FTM2_C1SC = 0x69;
   dma1.enable();
   dma2.enable();           // enable all 3 DMA channels
@@ -460,16 +459,18 @@ void MonopodWS2811::show(void)
   while (FTM2_CNT > cv) ; // wait for beginning of an 800 kHz cycle
   while (FTM2_CNT < cv) ;
   FTM2_SC = 0;             // stop FTM2 timer (hopefully before it rolls over)
+  FTM2_CNT = 0;
   update_in_progress = 1;
   //digitalWriteFast(9, HIGH); // oscilloscope trigger
   PORTA_ISFR = (1<<10);    // clear any prior rising edge
-  uint32_t tmp __attribute__((unused));
   FTM2_C0SC = 0x28;
-  tmp = FTM2_C0SC;         // clear any prior timer DMA triggers
+  // Clear any prior timer DMA triggers
+  asm volatile ("" : "=m" (FTM2_C0SC) : "r" (FTM2_C0SC));
   FTM2_C0SC = 0x69;
   FTM2_C1SC = 0x28;
   tmp = FTM2_C1SC;
-  FTM2_C1SC = 0x69;
+  // Clear any prior timer DMA triggers
+  asm volatile ("" : "=m" (FTM2_C1SC) : "r" (FTM2_C1SC));
   dma1.enable();
   dma2.enable();           // enable all 3 DMA channels
   dma3.enable();

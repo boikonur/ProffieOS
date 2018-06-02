@@ -68,7 +68,11 @@ public:
     OUT, // Waiting for sound to fade out
   };
 
-  void SB_Motion(const Vec3& raw_gyro) override {
+  void SB_Motion(const Vec3& raw_gyro, bool clear) override {
+    if (clear) {
+      gyro_filter_.filter(raw_gyro);
+      gyro_filter_.filter(raw_gyro);
+    }
     Vec3 gyro = gyro_filter_.filter(raw_gyro);
     // degrees per second
     // May not need to smooth gyro since volume is smoothed.
@@ -173,7 +177,7 @@ private:
       if (!player) return;
       player->set_fade_time(0.2);  // Read from config file?
       player->FadeAndStop();
-      player = NULL;
+      player.Free();
     }
     void Stop() {
       if (!player) return;
@@ -192,7 +196,7 @@ private:
     void rotate(float degrees) {
       midpoint += degrees;
     }
-    BufferedWavPlayer *player = nullptr;
+    RefPtr<BufferedWavPlayer> player;
     float midpoint;
     float width;
   };
