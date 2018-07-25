@@ -21,7 +21,7 @@ public:
     return *this;
   }
 
-  void Free() { ptr_->SubRef(); ptr_ = nullptr; }
+  void Free() { if (ptr_) { ptr_->SubRef(); ptr_ = nullptr; }  }
   T* operator->() { return ptr_; }
   T* get() { return ptr_; }
   T& operator*() { return *ptr_; }
@@ -30,7 +30,7 @@ public:
   explicit operator bool() const { return ptr_ != nullptr; }
 
 private:
-  void AddRef() { ptr_->AddRef(); }
+  void AddRef() { if (ptr_) ptr_->AddRef(); }
   T* ptr_;
 };
 

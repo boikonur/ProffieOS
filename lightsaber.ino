@@ -39,7 +39,7 @@
 #include CONFIG_FILE
 #undef CONFIG_TOP
 
-#define ENABLE_DEBUG
+// #define ENABLE_DEBUG
 
 //
 // OVERVIEW
@@ -173,7 +173,7 @@ SnoozeTouch snooze_touch;
 SnoozeBlock snooze_config(snooze_touch, snooze_digital, snooze_timer);
 #endif
 
-const char version[] = "$Id$";
+const char version[] = "$Id: lightsaber.ino,v 1.264 2018/06/02 02:27:02 hubbe Exp $";
 
 #include "common/state_machine.h"
 #include "common/monitoring.h"
@@ -2095,7 +2095,6 @@ public:
   const char* name() override { return "Parser"; }
 
   void Setup() override {
-    ScopedPinTracer tracer(17);
     SA::begin();
   }
 
