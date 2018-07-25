@@ -1451,6 +1451,10 @@ public:
       Clash();
       return true;
     }
+    if (!strcmp(cmd, "force")) {
+      SaberBase::DoForce();
+      return true;
+    }
     if (!strcmp(cmd, "blast")) {
       // Avoid the base and the very tip.
       SaberBase::addBlast((200 + random(700)) / 1000.0);
