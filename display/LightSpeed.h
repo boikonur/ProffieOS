@@ -1,50 +1,16 @@
-// Number of Stars
-uint8_t n=100;
-// Width of the viewport (aka the body width)
-uint8_t w=127;
-// Height of the viewport (aka the body height)
-uint8_t h=32;
-// Center of the width of the viewport (width/2)
-uint8_t x=w/2;
-// Center of the height of the viewport (height/2)
-uint8_t y=h/2;
-// Hypothetical z-value representing where we are on the screen
-uint8_t z=(w+h)/2;
-// Determines how big to draw the star
-uint8_t starColorRatio=1/z;
-// Just a constant effecting the way stars move
-uint8_t starRatio=256;
-// The speed of the star. Yes, all star's have the same speed.
-uint8_t starSpeed=4;
-// Play around with the values for star speed, I noticed a cool effect if we made the star speed 0. Hence, I created a variable to save the star speed in those cases
-uint8_t starSpeedPrev=0;
-// Data structure to hold the position of all the stars
-uint8_t star[n];
-// Just a constant to hold the opacity
-uint8_t opacity=0.1;
-// Mouse Positions
-uint8_t cursorX=0;
-uint8_t cursorY=0;
-// Context of our canvas so we can draw stuff on it
-var context;
-// Holds the keycode of the key that was most recently pressed
-var key;
-// Holds the actual timeout
-var timeout;
-// The time we want to wait between each redraw. 0 goes the fastest
-var waitTime=0;
-// Boolean for if the animation is running
-var isRunning=true;
+uint8_t n=100; // Number of Stars
+uint8_t w=127; // Width of the viewport (aka the body width)
+uint8_t h=32; // Height of the viewport (aka the body height)
+uint8_t x=w/2; // Center of the width of the viewport (width/2)
+uint8_t y=h/2; // Center of the height of the viewport (height/2)
+uint8_t z=(w+h)/2; // Hypothetical z-value representing where we are on the screen
+uint8_t starColorRatio=1/z; // Determines how big to draw the star
+uint8_t starRatio=256; // Just a constant effecting the way stars move
+uint8_t starSpeed=4; // The speed of the star. Yes, all star's have the same speed.
+uint8_t starSpeedPrev=0; // Play around with the values for star speed, I noticed a cool effect if we made the star speed 0. Hence, I created a variable to save the star speed in those cases
+uint8_t star[n][5]; // Data structure to hold the position of all the stars
 
-// To start the animation
-function start(){
-
-    init();
-	animate();
-}
-
-/* Initialize the stars and the canvas */
-function init(){
+void InitLightSpeed(){
 	/* Initialize the stars.
 	Since the ship is in the middle, we assume
 	Each star has the following properties:
@@ -54,37 +20,30 @@ function init(){
 	4.[3] Calculated X (represents X-coordinate on screen)
 	5.[4] Calculated Y (represents Y-coordinate on screen)
 	*/
-	for(var i=0;i<n;i++){
-		star[i]=new Array(5);
-		star[i][0]=Math.random()*w*2-x*2;
-		star[i][1]=Math.random()*h*2-y*2;
-		star[i][2]=Math.round(Math.random()*z);
+	for(int i=0;i<n;i++){
+		star[i][0]= random(w);//Math.random()*w*2-x*2;
+		star[i][1]= random(h); //Math.random()*h*2-y*2;
+		star[i][2]= random(z);//Math.round(Math.random()*z);
 		star[i][3]=0;
 		star[i][4]=0;
 	}
-	/* make sure the canvas has the correct properties */
-	var space=document.getElementById('space');
-	space.style.position='absolute';
-	space.width=w;
-	space.height=h;
-	/* Get the context from the canvas */
-	context=space.getContext('2d');
-	context.fillStyle='rgb(0,0,0)';
-	context.strokeStyle='rgb(255,255,255)';
+
+	ClearScreen();
+
 }
-function animate(){
-	var mouseX=cursorX-x;
-	var mouseY=cursorY-y;
-	context.fillRect(0,0,w,h);
-	for(var i=0;i<n;i++){
+void AnimateLightSpeed(){
+
+	ClearScreen();
+
+	for(int i=0;i<n;i++){
 		// Flag for if the star is offscreen (we don't want to draw it)
-		var test=true;
+		int test=true;
 		/* Save the stars calculated position so we can use it for drawing */
-		var starXPrev=star[i][3];
-		var starYPrev=star[i][4];
+		int starXPrev=star[i][3];
+		int starYPrev=star[i][4];
 		/* Update the Star */
-		star[i][0]+=mouseX>>4;
-		star[i][1]+=mouseY>>4;
+		// star[i][0]+=mouseX>>4;
+		// star[i][1]+=mouseY>>4;
 		star[i][2]-=starSpeed;
 		/* Check the boundary conditions to make sure stars aren't offscreen. */
 		if(star[i][0]>x<<1){ 
@@ -117,47 +76,23 @@ function animate(){
 		// Actually draw the object, if the star isn't offscreen
 		if(starXPrev>0&&starXPrev<w&&starYPrev>0&&starYPrev<h&&test){
 			// Note: all stars, even though appear the be dots, are actually drawn as lines
-			// LineWidth is Calculated so that if the star is closer to the ship, make the star appear bigger
-			context.lineWidth=(1-starColorRatio*star[i][2])*2;
-			context.beginPath();
-			// Draw the star from its previous position to the new position
-			context.moveTo(starXPrev,starYPrev);
-			context.lineTo(star[i][3],star[i][4]);
-			context.stroke();
-			context.closePath();
+			//lineWidth=(1-starColorRatio*star[i][2])*2;
+			DrawLine(starXPrev, starYPrev, star[i][3], star[i][4], WHITE);
 		}
 	}
-	if(isRunning){
-		timeout=setTimeout('animate()',waitTime);
-	}
+
 }
-// Method's for handling mouse and key inputs
-function mouseMove(evt){
-	evt=evt||event;
-	cursorX=evt.pageX;
-	cursorY=evt.pageY;
+
+// To start the animation
+void start(){
+    InitLightSpeed();
+	AnimateLightSpeed();
 }
-function keyPress(evt){
-	evt=evt||event;
-	key=evt.which||evt.keyCode;
-	switch(key){
-		// P or p Key. Pauses the animation.
-		case 112: case 80:
-			isRunning=!isRunning;
-			if(isRunning){
-				timeout=setTimeout('animate()',waitTime);
-			}else{
-				clearTimeout(timeout);
-			}
-			break;
-		// SPACE key. We save the star speed and set it to 0 for a nice effect
-		case 32:
-			starSpeedPrev = (starSpeed != 0) ? starSpeed:starSpeedPrev;
-			starSpeed = (starSpeed != 0) ? 0:starSpeedPrev;
-			break;
-		// ENTER or RETURN key. We make the ship go lightspeed.
-		case 13:
-			context.fillStyle = 'rgba(0,0,0,'+opacity+')';
-			break;
-	}
+
+
+void loop(){
+AnimateLightSpeed();
+	//TODO: Try effect below
+		// starSpeedPrev = (starSpeed != 0) ? starSpeed:starSpeedPrev;
+		// starSpeed = (starSpeed != 0) ? 0:starSpeedPrev;	
 }
