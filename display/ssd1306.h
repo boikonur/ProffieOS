@@ -1,17 +1,6 @@
 #ifndef DISPLAY_SSD1306_H
 #define DISPLAY_SSD1306_H
 
-#define NUM_STARS 100 // Number of Stars
-int16_t w=127; // Width of the viewport (aka the body width)
-int16_t h=32; // Height of the viewport (aka the body height)
-int16_t x=w/2; // Center of the width of the viewport (width/2)
-int16_t y=h/2; // Center of the height of the viewport (height/2)
-int16_t z=(w+h)/2; // Hypothetical z-value representing where we are on the screen
-int16_t starColorRatio=1/z; // Determines how big to draw the star
-#define STAR_RATIO 2 // Just a constant effecting the way stars move
-int16_t starSpeed=4; // The speed of the star. Yes, all star's have the same speed.
-int16_t starSpeedPrev=0; // Play around with the values for star speed, I noticed a cool effect if we made the star speed 0. Hence, I created a variable to save the star speed in those cases
-int16_t Particle[NUM_STARS][5]; // Data structure to hold the position of all the stars
 
 
 struct Glyph {
@@ -136,6 +125,10 @@ public:
   SSD1306() : I2CDevice(0x3C), CommandParser() {}
   void Send(int c) { writeByte(0, c); }
 
+void ClearScreen(){
+  memset(frame_buffer_, 0, sizeof(frame_buffer_));
+}
+
  void DrawPixel(int16_t  x, int16_t  y, uint8_t color){
 
     if (y<0 || x< 0) return;
@@ -251,9 +244,7 @@ void DrawFullRect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color) {
     }
 }
 
-void ClearScreen(){
-  memset(frame_buffer_, 0, sizeof(frame_buffer_));
-}
+
 
    bool Parse(const char* cmd, const char* arg) override {
     if (!strcmp(cmd, "ssd")) {     
@@ -329,83 +320,6 @@ void DrawScreenSaver( const char* text){
 
 
 
-void InitLightSpeed(){
-	/* Initialize the stars.
-	Since the ship is in the middle, we assume
-	Each star has the following properties:
-	1.[0] Actual X-coordinate of position in prespective of ship
-	2.[1] Actual Y-coordinate of position in prespective of ship
-	3.[2] Actual Z-coordinate of position in prespective of ship
-	4.[3] Calculated X (represents X-coordinate on screen)
-	5.[4] Calculated Y (represents Y-coordinate on screen)
-	*/
-	for(int i=0;i<NUM_STARS;i++){
-		Particle[i][0]= random()*w*2-x*2;
-		Particle[i][1]= random()*h*2-y*2;
-		Particle[i][2]= (random()*z);  //round
-		Particle[i][3]=0;
-		Particle[i][4]=0;
-	}
-
-	ClearScreen();
-
-}
-void AnimateLightSpeed(){
-
-	//ClearScreen();
-
-	for(int i=0;i<NUM_STARS;i++){
-		// Flag for if the star is offscreen (we don't want to draw it)
-		int test=true;
-		/* Save the stars calculated position so we can use it for drawing */
-		uint8_t starXPrev=Particle[i][3];
-		uint8_t starYPrev=Particle[i][4];
-
-		Particle[i][2]-=starSpeed;
-		/* Check the boundary conditions to make sure stars aren't offscreen. */
-		if(Particle[i][0]>x<<1){ 
-			Particle[i][0]-=w<<1; 
-			test=false; 
-		} 
-		if(Particle[i][0]<-x<<1){ 
-			Particle[i][0]+=w<<1; 
-			test=false;
-		}
-		if(Particle[i][1]>y<<1){ 
-			Particle[i][1]-=h<<1; 
-			test=false; 
-		} 
-		if(Particle[i][1]<-y<<1){ 
-			Particle[i][1]+=h<<1; 
-			test=false; 
-		}
-		if(Particle[i][2]>z){ 
-			Particle[i][2]-=z; 
-			test=false;
-		} 
-		if(Particle[i][2]<0){ 
-			Particle[i][2]+=z; 
-			test=false; 
-		}
-		// Our calculated position and where the star is going to be drawn on the screen
-		Particle[i][3]=x + (Particle[i][0]/Particle[i][2]) * STAR_RATIO;
-		Particle[i][4]=y + (Particle[i][1]/Particle[i][2]) * STAR_RATIO;
-		// Actually draw the object, if the star isn't offscreen
-		if(
-      (starXPrev > 0)&&
-        (starXPrev < w )&&
-        (starYPrev > 0)&&
-        (starYPrev < h)&&
-        test
-        ){
-			// Note: all stars, even though appear the be dots, are actually drawn as lines
-			//lineWidth=(1-starColorRatio*star[i][2])*2;
-			DrawLine(starXPrev, starYPrev, Particle[i][3], Particle[i][4], WHITE);
-
-		}
-	}
-
-}
 
 void RainScreen(){
   
@@ -439,15 +353,11 @@ char* GfxBatteryPercentage(void){
       case SCREEN_STARTUP:
         DrawText("==SabeR===", 0,15, FONT_NAME);
         DrawText("++Teensy++",-4,31, FONT_NAME);
-        InitLightSpeed();
+
         break;
 
       case SCREEN_SAVER:        
        // DrawScreenSaver(GfxBatteryPercentage());   
-           if (millis() - updateLightspeed_ > 50)
-        AnimateLightSpeed();
-
-     
         break;
 
       case SCREEN_PLI:
@@ -517,7 +427,6 @@ char* GfxBatteryPercentage(void){
     STDOUT.println("Display initialized.");
     screen_ = SCREEN_STARTUP;
     displayed_when_ = millis();
-    updateLightspeed_= millis();
     
     while (true) {
       FillFrameBuffer();
@@ -567,8 +476,6 @@ private:
   LoopCounter loop_counter_;
   char message_[32];
   uint32_t displayed_when_;
-
-    uint32_t updateLightspeed_;
   Screen screen_;
 
 
