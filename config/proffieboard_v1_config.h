@@ -3,7 +3,7 @@
 // to change anything in this file.
 
 #define VERSION_MAJOR 4
-#define VERSION_MINOR 1
+#define VERSION_MINOR 5
 #define V2
 #define V3
 #define PROFFIEBOARD
@@ -14,7 +14,7 @@
 enum SaberPins {
   // I2S
   bclkPin = 3,                   // BCLK (digital audio)   PB13
-  txd0Pin = 5,                   // TXD0 (digital audio)   PB15
+  txd0Pin = 31,                  // TXD0 (digital audio)   PA10
   lrclkPin = 2,                  // LRCLK (digital audio)  PB12
 
   // I2C
@@ -27,10 +27,10 @@ enum SaberPins {
   aux2Pin = 22,                   // AUX2 button   PB4
 
   // Memory card
-  sdCardSelectPin = 14,           // PA4
+  sdCardSelectPin = 4,            // PB14
   spiDataOut = 11,                // PA7
   spiDataIn = 12,                 // PA6
-  spiClock = 13,                  // PA1
+  spiClock = 15,                  // PA5
 
   amplifierPin = 26,              // Amplifier enable pin PH1
   boosterPin = 38,                // Booster enable pin   PH0
@@ -46,18 +46,33 @@ enum SaberPins {
   bladeIdentifyPin = 16,          // blade identify input / FoC
   blade2Pin = 1,                  // PB10
   blade3Pin = 0,                  // PB11
+  blade4Pin = 17,                 // PA03
+  blade5Pin = 24,                 // PB03
+  blade6Pin = 8,                  // PA15 (also UART)
+  blade7Pin = 9,                  // PA02 (also UART)
 
   // Blade power control
-  bladePowerPin1 = 17,            // blade power control PA3
-  bladePowerPin2 = 31,            // blade power control PA10
+  bladePowerPin1 = 13,            // blade power control PA1
+  bladePowerPin2 = 10,            // blade power control PA8
   bladePowerPin3 = 18,            // blade power control PB0
-  bladePowerPin4 = 10,            // blade power control PA8
-  bladePowerPin5 = 4,             // blade power control PB5
-  bladePowerPin6 = 6,             // blade power control PB6
+  bladePowerPin4 = 19,            // blade power control PB1
+  bladePowerPin5 = 5,             // blade power control PB15
+  bladePowerPin6 = 6,             // blade power control PB8
+
+  // If there is no neopixels, these can be used as PWM output
+  // If neopixels are present, but not on these pins, PWM may still
+  // be possible at 800kHz.
+  // You can drive 20mA LEDs with a resistor from these pins, or
+  // hook up an external FET to drive more powerful LEDs
+  bladePowerPin7 = 24,            // PB03 (also neopix5)
+  bladePowerPin8 = 1,             // PB10 (also neopix2)
+  bladePowerPin9 = 0,             // PB11 (also neopix3)
+  bladePowerPin10 = 10,           // PA00 (also blade ID / neopixels)
 
   // Analog pins
-  batteryLevelPin = 19,           // battery level input PB1
+  batteryLevelPin = 14,           // battery level input PA04
 
-  FreePin1 = 15,  // PA5
-  FreePin2 = 24,  // PB3
+  // UART
+  rxPin = 8,                      // PA15
+  txPin = 9,                      // PA02
 };
