@@ -173,7 +173,7 @@ SnoozeTouch snooze_touch;
 SnoozeBlock snooze_config(snooze_touch, snooze_digital, snooze_timer);
 #endif
 
-const char version[] = "$Id: lightsaber.ino,v 1.264 2018/06/02 02:27:02 hubbe Exp $";
+const char version[] = "$Id: lightsaber.ino,v 1.267 2018/08/06 00:57:44 hubbe Exp $";
 
 #include "common/state_machine.h"
 #include "common/monitoring.h"
@@ -1449,10 +1449,6 @@ public:
     }
     if (!strcmp(cmd, "clash")) {
       Clash();
-      return true;
-    }
-    if (!strcmp(cmd, "force")) {
-      SaberBase::DoForce();
       return true;
     }
     if (!strcmp(cmd, "blast")) {
