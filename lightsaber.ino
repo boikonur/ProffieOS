@@ -21,7 +21,7 @@
 // You can have multiple configuration files, and specify which one
 // to use here.
 
-// #define CONFIG_FILE "config/default_v3_config.h"
+#define CONFIG_FILE "config/default_v3_config.h"
 // #define CONFIG_FILE "config/default_proffieboard_config.h"
 // #define CONFIG_FILE "config/crossguard_config.h"
 // #define CONFIG_FILE "config/graflex_v1_config.h"
@@ -29,7 +29,7 @@
 // #define CONFIG_FILE "config/owk_v2_config.h"
 // #define CONFIG_FILE "config/test_bench_config.h"
 // #define CONFIG_FILE "config/toy_saber_config.h"
-#define CONFIG_FILE "config/proffieboard_v1_test_bench_config.h"
+// #define CONFIG_FILE "config/proffieboard_v1_test_bench_config.h"
 
 #ifdef CONFIG_FILE_TEST
 #undef CONFIG_FILE
@@ -773,13 +773,44 @@ public:
     return false;
   }
 
+  int32_t muted_volume_ = 0;
+  bool SetMute(bool muted) {
+#ifdef ENABLE_AUDIO
+    if (muted) {
+      if (dynamic_mixer.get_volume()) {
+	muted_volume_ = dynamic_mixer.get_volume();
+	dynamic_mixer.set_volume(0);
+	return true;
+      }
+    } else {
+      if (muted_volume_) {
+	dynamic_mixer.set_volume(muted_volume_);
+	muted_volume_ = 0;
+	return true;
+      }
+    }
+#endif      
+    return false;
+  }
+
+  bool unmute_on_deactivation_ = false;
+  uint32_t activated_ = 0;
+  uint32_t last_clash_ = 0;
+  uint32_t clash_timeout_ = 100;
+
   void On() {
     if (SaberBase::IsOn()) return;
     if (current_style() && current_style()->NoOnOff())
       return;
+    activated_ = millis();
     STDOUT.println("Ignition.");
     EnableAmplifier();
     SaberBase::TurnOn();
+
+    // Avoid clashes a little bit while turning on.
+    // It might be a "clicky" power button...
+    last_clash_ = activated_;
+    clash_timeout_ = 300;
   }
 
   void Off() {
@@ -788,10 +819,12 @@ public:
       SaberBase::DoEndLockup();
     }
     SaberBase::TurnOff();
+    if (unmute_on_deactivation_) {
+      unmute_on_deactivation_ = false;
+      SetMute(false);
+    }
   }
 
-  uint32_t last_clash_ = 0;
-  uint32_t clash_timeout_ = 100;
   void Clash() {
     // No clashes in lockup mode.
     if (SaberBase::Lockup()) return;
@@ -1249,6 +1282,7 @@ public:
         On();
         break;
 
+
       case EVENTID(BUTTON_AUX, EVENT_CLICK_SHORT, MODE_OFF):
 #ifdef DUAL_POWER_BUTTONS
         aux_on_ = true;
@@ -1257,7 +1291,15 @@ public:
         next_preset();
 #endif
         break;
-         
+
+      case EVENTID(BUTTON_POWER, EVENT_DOUBLE_CLICK, MODE_ON):
+	if (millis() - activated_ < 500) {
+	  if (SetMute(true)) {
+	    unmute_on_deactivation_ = true;
+	  }
+	}
+	break;
+	
       case EVENTID(BUTTON_POWER, EVENT_CLICK_SHORT, MODE_ON):
       case EVENTID(BUTTON_POWER, EVENT_LATCH_OFF, MODE_ON):
       case EVENTID(BUTTON_AUX, EVENT_LATCH_OFF, MODE_ON):
@@ -1530,6 +1572,19 @@ public:
       if (volume >= 0 && volume <= 3000)
         dynamic_mixer.set_volume(volume);
 #endif      
+      return true;
+    }
+    
+    if (!strcmp(cmd, "mute")) {
+      SetMute(true);
+      return true;
+    }
+    if (!strcmp(cmd, "unmute")) {
+      SetMute(false);
+      return true;
+    }
+    if (!strcmp(cmd, "toggle_mute")) {
+      if (!SetMute(true)) SetMute(false);
       return true;
     }
     
@@ -2583,7 +2638,7 @@ class SerialCommands : public CommandParser {
 #ifdef BLE_SHORTNAME
       PrintQuotedValue("shortname", BLE_SHORTNAME);
 #else
-      if (sizeof(BLE_NAME) - sizeof("") <= 9) {
+      if (sizeof(BLE_NAME) - sizeof("") <= 8) {
         PrintQuotedValue("shortname", BLE_NAME);
       } else {
         PrintQuotedValue("shortname", "Saber");
@@ -2877,6 +2932,7 @@ void loop() {
 #if VERSION_MAJOR >= 4
       // stm32l4_system_sysclk_configure(1000000, 500000, 500000);
       // Delay will enter low-power mode.
+      // TODO: Do we need to disable this when serial port is active?
       delay(50);         // 13.8 mA
       // STM32.stop(50);  // 12.4 mA
       // stm32l4_system_sysclk_configure(_SYSTEM_CORE_CLOCK_, _SYSTEM_CORE_CLOCK_/2, _SYSTEM_CORE_CLOCK_/2);
