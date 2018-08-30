@@ -821,6 +821,12 @@ public:
     SaberBase::TurnOff();
     if (unmute_on_deactivation_) {
       unmute_on_deactivation_ = false;
+#ifdef ENABLE_AUDIO
+      // We may also need to stop any thing else that generates noise..
+      for (size_t i = 0; i < NELEM(wav_players); i++) {
+        wav_players[i].Stop();
+      }
+#endif
       SetMute(false);
     }
   }
@@ -894,12 +900,15 @@ public:
         }
       }
     }
+//    EnableBooster();
 #endif
     return false;
   }
 
   // Select preset (font/style)
   void SetPreset(Preset* preset, bool announce) {
+    bool on = SaberBase::IsOn();
+    if (on) Off();
     if (announce) {
       if (preset->name) {
         SaberBase::DoMessage(preset->name);
@@ -927,6 +936,7 @@ public:
     current_config_->blade##N->SetStyle(preset->style_allocator##N->make());
     ONCEPERBLADE(SET_BLADE_STYLE)
     chdir(preset->font);
+    if (on) On();
   }
 
   // Go to the next Preset.
